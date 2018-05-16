@@ -1,14 +1,8 @@
-test_logreg:
-	python tests/mnist_dlsys.py -l -m logreg
-
-test_mlp:
-	python tests/mnist_dlsys.py -l -m mlp
-
-test_op:
-	nosetests -v tests/test_tvm_op.py
+test_dependency_engine:
+	python tests/test_dependency_engine.py
 
 export:
-	PYTHONPATH="${PYTHONPATH}:/Users/macbook/git/assignment2-2018/python"
+	PYTHONPATH="${PYTHONPATH}:/Users/macbook/git/DependencyEngine/python"
 
 clean:
 	rm -rf ./python/dlsys/*.pyc

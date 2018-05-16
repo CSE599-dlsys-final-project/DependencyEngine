@@ -138,7 +138,7 @@ def mnist_logreg(executor_ctx, num_epochs=10, print_loss_val_each_epoch=False):
             b1_sgd_update_func(b1_val, grad_b1_val, b1_val)
         time_measurements.append(time.time() - start_time)
         if print_loss_val_each_epoch:
-            print("loss = %f; Time taken this epoch = %f s" 
+            print("loss = %f; Time taken this epoch = %f s"
                 % (np.asscalar(loss_val.asnumpy()), time_measurements[-1]))
 
     correct_predictions = []
@@ -163,7 +163,7 @@ def mnist_logreg(executor_ctx, num_epochs=10, print_loss_val_each_epoch=False):
     # validation set accuracy=0.928200
     print("Validation set accuracy = %f" % accuracy)
     print("Average Time per Training Epoch = %f s" % np.mean(time_measurements))
-    
+
 
 def mnist_mlp(executor_ctx=None, num_epochs=10,
               print_loss_val_each_epoch=False):
@@ -293,10 +293,10 @@ def mnist_mlp(executor_ctx=None, num_epochs=10,
             b1_sgd_update_func(b1_val, grad_b1_val, b1_val)
             b2_sgd_update_func(b2_val, grad_b2_val, b2_val)
             b3_sgd_update_func(b3_val, grad_b3_val, b3_val)
-        
+
         time_measurements.append(time.time() - start_time)
         if print_loss_val_each_epoch:
-            print("loss = %f; Time taken this epoch = %f s" 
+            print("loss = %f; Time taken this epoch = %f s"
                 % (np.asscalar(loss_val.asnumpy()), time_measurements[-1]))
 
 
@@ -326,7 +326,7 @@ def mnist_mlp(executor_ctx=None, num_epochs=10,
     # validation set accuracy=0.970800
     print("Validation set accuracy = %f" % accuracy)
     print("Average Time per Training Epoch = %f s" % np.mean(time_measurements))
-    
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
