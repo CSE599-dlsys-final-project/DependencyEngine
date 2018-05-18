@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 from queue import Queue
+from enum import Enum
 
 class Dependency_Engine(object):
     def __init__(self):
@@ -33,64 +34,83 @@ class Dependency_Engine(object):
     def fake_executor(self):
         for tag in self.resource_state_queues:
             # no instructions pending
-            if self.resource_state_queues[tag].peek() == None:
+            if self.resource_state_queues[tag].peek() is None:
                 continue
             ### resolve the next pending instruction
             # mutate or read + mutate
             if tag in self.resource_state_queues[tag].peek().m_tags:
                 # can do stuff
-                if self.resource_state_queues[tag].state == 2:
+                if self.resource_state_queues[tag].state == State.MR:
                     # pop
                     instruction = self.resource_state_queues[tag].pop()
                     # change state to N
-                    self.resource_state_queues[tag].state = 0
+                    self.resource_state_queues[tag].state = State.N
                     instruction.pc = instruction.pc - 1
                     if instruction.pc == 0:
                         instruction.fn()
                         # fake callback
                         for changed_tag in instruction.m_tags:
-                            self.resource_state_queues[changed_tag].state = 2
+                            self.resource_state_queues[changed_tag].state = State.MR
                         for changed_tag in instruction.r_tags:
-                            self.resource_state_queues[changed_tag].state = 2
+                            self.resource_state_queues[changed_tag].state = State.MR
             # read only
             elif (tag in self.resource_state_queues[tag].peek().r_tags) \
                 and (not tag in self.resource_state_queues[tag].peek().m_tags):
                 # can do stuff
-                if self.resource_state_queues[tag].state == 2 or \
-                    self.resource_state_queues[tag].state == 1:
+                if self.resource_state_queues[tag].state == State.MR or \
+                    self.resource_state_queues[tag].state == State.R:
                     prev = self.resource_state_queues[tag].state
                     # pop
                     instruction = self.resource_state_queues[tag].pop()
                     # change state to N
-                    self.resource_state_queues[tag].state = 1
+                    self.resource_state_queues[tag].state = State.R
                     instruction.pc = instruction.pc - 1
                     if instruction.pc == 0:
                         instruction.fn()
                         # fake callback
                         for changed_tag in instruction.m_tags:
-                            self.resource_state_queues[changed_tag].state = 2
+                            self.resource_state_queues[changed_tag].state = State.MR
                         for changed_tag in instruction.r_tags:
                             self.resource_state_queues[changed_tag].state = prev
 
+# the state of a resource queue
+class State(Enum):
+    N = 0
+    R = 1
+    MR = 2
+
+# Resource tag represent a variable / object / etc...
+# in the dependency engine. Resource tags with the same
+# name will be hashed to the same thing.
 class ResourceTag(object):
     def __init__(self, name = None):
-        if name != None:
+        if name is not None:
             self.name = name
         else:
-            self.name = "ResourceTag"
+            self.name = "ResourceTag " + str(id(self))
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
 
     def __repr__(self):
         return self.name
 
+
+# Tracks a queue of Instructions and the avaliability of the queue.
+# The state of the queue should always reflect the avaliability of the next
+# element in the queue.
 class ResourceStateQueue(object):
     def __init__(self):
         # the queue is consisted of pending instructions
         self.queue = Queue()
         # integer represent state of the resource:
-        #   0 (N state) - not ready for read/mutate
-        #   1 (R state) - only ready for read
-        #   2 (MR state) - ready for read/mutate
-        self.state = 2
+        #   N state - not ready for read/mutate
+        #   R state - only ready for read
+        #   MR state - ready for read/mutate
+        self.state = State.MR
 
     ### queue functions
     # get the next element without popping it
@@ -108,9 +128,10 @@ class ResourceStateQueue(object):
         return self.queue.get()
 
     def __repr__(self):
-        num_to_state = {0:"N", 1:"R", 2:"MR"}
+        num_to_state = {State.N:"N", State.R:"R", State.MR:"MR"}
         return "ResourceStateQueue: " + num_to_state[self.state];
 
+# Stores a lambda function and its dependencies.
 class Instruction(object):
     def __init__(self, exec_func, read_tags, mutate_tags, pending_counter):
         self.fn = exec_func
