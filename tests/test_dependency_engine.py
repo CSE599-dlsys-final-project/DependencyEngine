@@ -10,7 +10,9 @@ tgt="llvm"
 dtype = "float32"
 ctx = tvm.context(tgt, 0)
 
-def test_matrix_elementwise_add():
+def test_matrix_elementwise_add_naive():
+    print("******")
+    print("Testing naive elemwise add")
     ### preparing data
     shape = (500, 200)
     x = np.random.uniform(0, 10, size=shape).astype(dtype)
@@ -31,12 +33,12 @@ def test_matrix_elementwise_add():
     ### running the fake executor as we push in instructions
     ### where we just simulate it by as if it keeps running
     for _ in range(5):
-        engine.fake_executor()
+        engine.naive_executor()
     elemwise_add = tvm_op.make_elemwise_add(shape, tgt, tgt_host, "elem_add")
     # push first instruction (tvm instruction)
     engine.push(lambda: elemwise_add(arr_x, arr_y, arr_z), [x_tag, y_tag], [z_tag])
     for _ in range(5):
-        engine.fake_executor()
+        engine.naive_executor()
 
     # test if we got it right
     # since we not running on threads, no need for blocking
@@ -46,7 +48,7 @@ def test_matrix_elementwise_add():
     # push second instruction (print intruction)
     engine.push(lambda: print(arr_z.asnumpy()), [z_tag], [])
     for _ in range(5):
-        engine.fake_executor()
+        engine.naive_executor()
 
 
-test_matrix_elementwise_add()
+test_matrix_elementwise_add_naive()
