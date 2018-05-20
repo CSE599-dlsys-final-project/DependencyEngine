@@ -1,9 +1,12 @@
 """A library to take autodiff and execute a computation graph """
 from __future__ import absolute_import
+import functools
 
 import numpy as np
 import tvm
+
 from . import tvm_op
+from . import dependency_engine
 
 class Node(object):
     """Node in a computation graph."""
@@ -602,7 +605,6 @@ class Executor(object):
         ----------
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
-        """TODO: Your code here"""
 
         # initialize
         self.node_to_shape_map = {}
@@ -640,7 +642,6 @@ class Executor(object):
         ----------
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
-        """TODO: Your code here"""
 
         # initialize
         self.node_to_arr_map = {}
@@ -666,7 +667,6 @@ class Executor(object):
         ----------
         feed_shapes: node->shapes mapping for feed_dict nodes.
         """
-        """TODO: Your code here"""
         # initialize
         self.node_to_compiled_func = {}
 
@@ -687,7 +687,6 @@ class Executor(object):
             # get the complied function
             self.node_to_compiled_func[node] = node.op.compiled_func(
                 node, input_shapes, self.tgt, self.tgt_host)
-
 
     def run(self, feed_dict, convert_to_numpy_ret_vals=False):
         """
@@ -740,6 +739,65 @@ class Executor(object):
         if convert_to_numpy_ret_vals:
             return [node_to_val_map[n].asnumpy() for n in self.eval_node_list]
         return [node_to_val_map[n] for n in self.eval_node_list]
+
+    def run_with_dependency_engine(self, feed_dict, convert_to_numpy_ret_vals=False):
+        """
+        Like run(), but with the dependency engine.
+        """
+        def are_feed_shapes_equal(sa, sb):
+            if (not isinstance(sa, dict)) or (not isinstance(sb, dict)):
+                return False
+            unmatched_item = set(sa.items()) ^ set(sb.items())
+            return len(unmatched_item) == 0
+
+        node_to_val_map = {}
+        for node, value in feed_dict.items():
+            assert isinstance(value, tvm.ndarray.NDArray),\
+                "feed_dict value type not supported"
+            node_to_val_map[node] = value
+
+        # collect shapes for all placeholders
+        feed_shapes = {}
+        for node in node_to_val_map:
+            feed_shapes[node] = node_to_val_map[node].shape
+
+        # infer shape if feed_shapes changed since last run
+        # e.g. call run() on test data after trainng
+        if (not are_feed_shapes_equal(feed_shapes, self.feed_shapes)):
+            self.infer_shape(feed_shapes)
+            self.feed_shapes = feed_shapes
+            self.memory_plan(feed_shapes)
+            self.compile_funcs(feed_shapes)
+
+        engine = dependency_engine.Dependency_Engine()
+
+        # Traverse graph in topo order and compute values for all nodes.
+        for node in self.topo_order:
+            if node in node_to_val_map:
+                # Skip placeholder nodes. Values already provided by feed_dict.
+                continue
+
+            input_vals = [node_to_val_map[n] for n in node.inputs]
+            node_val = self.node_to_arr_map[node]
+            # node_val is modified in-place
+
+            compute = functools.partial(node.op.compute,
+                node, input_vals, node_val, self.node_to_compiled_func[node])
+
+            exec_inputs = [engine.new_variable(n.name)
+                for n in node.inputs]
+            exec_outputs = [engine.new_variable(node.name)]
+
+            engine.push(compute, exec_inputs, exec_outputs)
+
+            #import pdb; pdb.set_trace()
+
+            node_to_val_map[node] = node_val
+        # Collect node values.
+        if convert_to_numpy_ret_vals:
+            return [node_to_val_map[n].asnumpy() for n in self.eval_node_list]
+        return [node_to_val_map[n] for n in self.eval_node_list]
+
 
 
 def gradients(output_node, node_list):
@@ -828,12 +886,12 @@ def broadcast_rule(shape_a, shape_b):
     else:
         longer_shape, shorter_shape = shape_b, shape_a
     len_diff = len(longer_shape) - len(shorter_shape)
-    for i in xrange(len_diff):
+    for i in range(len_diff):
         # pad with leading 1s
         shorter_shape = (1,) + shorter_shape
     assert len(shorter_shape) == len(longer_shape)
     output_shape = list(longer_shape)
-    for i in xrange(len(output_shape)):
+    for i in range(len(output_shape)):
         assert (shorter_shape[i] == longer_shape[i]) \
             or (shorter_shape[i] == 1) \
             or (longer_shape[i] == 1)
