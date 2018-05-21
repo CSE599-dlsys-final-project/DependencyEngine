@@ -797,11 +797,9 @@ class Executor(object):
                 exec_inputs = [make_resource_tag(n) for n in node.inputs]
                 exec_outputs = [make_resource_tag(node)]
 
+                # node_val updated inplace by compute func.
                 engine.push(compute, exec_inputs, exec_outputs,
-                    lambda computed_val: node_to_val_map.update({node: computed_val}))
-
-                # import pdb; pdb.set_trace()
-                # node_to_val_map[node] = node_val
+                    lambda: node_to_val_map.update({node: node_val}))
         finally:
             engine.stop_threaded_executor() # blocks until execution is done.
 

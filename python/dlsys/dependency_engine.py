@@ -131,10 +131,10 @@ class ResourceStateQueue(object):
                 self.state = State.N
                 instruction.pc = instruction.pc - 1
                 if instruction.pc == 0:
-                    result = instruction.fn()
+                    instruction.fn()
 
                     if instruction.store_func is not None:
-                        instruction.store_func(result)
+                        store_func()
 
                     # fake callback
                     for changed_tag in instruction.m_tags:
