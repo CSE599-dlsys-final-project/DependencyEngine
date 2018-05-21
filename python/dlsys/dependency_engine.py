@@ -20,14 +20,21 @@ class Dependency_Engine(object):
 
     def new_variable(self, name = None):
         rtag = ResourceTag(name)
-        self.resource_state_queues[rtag] = ThreadedResourceStateQueue(self.stop_signal)
+
+        q = ThreadedResourceStateQueue(self.stop_signal)
+        self.resource_state_queues[rtag] = q
+
+        if not self.stop_signal.stop:
+            q.start_listening(rtag, self.resource_state_queues)
+
         return rtag
 
-    def push(self, exec_func, read_tags, mutate_tags, store_func=None):
+    def push(self, exec_func, read_tags, mutate_tags, callback=None):
         # pending count is the number of unique tags
         pending_count = len(set(read_tags + mutate_tags))
         # create instruction based on given parameters
-        instruction = Instruction(exec_func, read_tags, mutate_tags, pending_count)
+        instruction = Instruction(
+            exec_func, read_tags, mutate_tags, pending_count, callback)
 
         # push instructions into the queue
         # exclusively read
@@ -76,12 +83,12 @@ class StopSignal(object):
 
 # Stores a lambda function and its dependencies.
 class Instruction(object):
-    def __init__(self, exec_func, read_tags, mutate_tags, pending_counter, store_func=None):
+    def __init__(self, exec_func, read_tags, mutate_tags, pending_counter, callback=None):
         self.fn = exec_func
         self.pc = pending_counter
         self.m_tags = mutate_tags
         self.r_tags = read_tags
-        self.store_func = store_func
+        self.callback = callback
 
 # Resource tag represent a variable / object / etc...
 # in the dependency engine. Resource tags with the same
@@ -133,8 +140,8 @@ class ResourceStateQueue(object):
                 if instruction.pc == 0:
                     instruction.fn()
 
-                    if instruction.store_func is not None:
-                        store_func()
+                    if instruction.callback is not None:
+                        callback()
 
                     # fake callback
                     for changed_tag in instruction.m_tags:
@@ -155,6 +162,10 @@ class ResourceStateQueue(object):
                 instruction.pc = instruction.pc - 1
                 if instruction.pc == 0:
                     instruction.fn()
+
+                    if instruction.callback is not None:
+                        callback()
+
                     # fake callback
                     for changed_tag in instruction.m_tags:
                         resource_state_queues[changed_tag].state = State.MR
@@ -194,8 +205,6 @@ class ThreadedResourceStateQueue(ResourceStateQueue):
             #self.running.clear()
             self.thread = Thread(target=self.listen, args=(tag, resource_state_queues))
             self.thread.start()
-        else:
-            raise Exception("Already listening.")
 
     # continue to listen for new instructions
     # until the stop_signal is set and all current works are done

@@ -797,9 +797,12 @@ class Executor(object):
                 exec_inputs = [make_resource_tag(n) for n in node.inputs]
                 exec_outputs = [make_resource_tag(node)]
 
+                def callback():
+                    print("callback called!")
+                    node_to_val_map[node] = node_val
+
                 # node_val updated inplace by compute func.
-                engine.push(compute, exec_inputs, exec_outputs,
-                    lambda: node_to_val_map.update({node: node_val}))
+                engine.push(compute, exec_inputs, exec_outputs, callback)
         finally:
             engine.stop_threaded_executor() # blocks until execution is done.
 
