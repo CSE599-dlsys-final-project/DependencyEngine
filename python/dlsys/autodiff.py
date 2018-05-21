@@ -769,7 +769,6 @@ class Executor(object):
             self.memory_plan(feed_shapes)
             self.compile_funcs(feed_shapes)
 
-
         engine = dependency_engine.Dependency_Engine()
 
         def make_resource_tag(n):
@@ -796,7 +795,7 @@ class Executor(object):
                     node, input_vals, node_val, self.node_to_compiled_func[node])
 
                 exec_inputs = [make_resource_tag(n) for n in node.inputs]
-                exec_outputs = [make_resource_tag(node.name)]
+                exec_outputs = [make_resource_tag(node)]
 
                 engine.push(compute, exec_inputs, exec_outputs,
                     lambda computed_val: node_to_val_map.update({node: computed_val}))
