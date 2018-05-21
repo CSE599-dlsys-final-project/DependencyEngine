@@ -141,7 +141,7 @@ class ResourceStateQueue(object):
                     instruction.fn()
 
                     if instruction.callback is not None:
-                        callback()
+                        instruction.callback()
 
                     # fake callback
                     for changed_tag in instruction.m_tags:
@@ -164,7 +164,7 @@ class ResourceStateQueue(object):
                     instruction.fn()
 
                     if instruction.callback is not None:
-                        callback()
+                        instruction.callback()
 
                     # fake callback
                     for changed_tag in instruction.m_tags:
