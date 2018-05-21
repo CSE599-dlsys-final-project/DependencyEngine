@@ -184,7 +184,7 @@ def test_mnist_logreg():
             X_val.copyfrom(train_set_x[minibatch_start:minibatch_end])
             y_val.copyfrom(
                 convert_to_one_hot(train_set_y[minibatch_start:minibatch_end]))
-            loss_val, grad_W1_val, grad_b1_val, _ = executor.run(
+            loss_val, grad_W1_val, grad_b1_val, _ = executor.run_with_dependency_engine(
                 feed_dict = {X: X_val, y_: y_val, W1: W1_val, b1: b1_val})
             # SGD update
             # W1_val = W1_val - lr * grad_W1_val

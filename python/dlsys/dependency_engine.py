@@ -23,7 +23,7 @@ class Dependency_Engine(object):
         self.resource_state_queues[rtag] = ThreadedResourceStateQueue(self.stop_signal)
         return rtag
 
-    def push(self, exec_func, read_tags, mutate_tags):
+    def push(self, exec_func, read_tags, mutate_tags, store_func=None):
         # pending count is the number of unique tags
         pending_count = len(set(read_tags + mutate_tags))
         # create instruction based on given parameters
@@ -76,11 +76,12 @@ class StopSignal(object):
 
 # Stores a lambda function and its dependencies.
 class Instruction(object):
-    def __init__(self, exec_func, read_tags, mutate_tags, pending_counter):
+    def __init__(self, exec_func, read_tags, mutate_tags, pending_counter, store_func=None):
         self.fn = exec_func
         self.pc = pending_counter
         self.m_tags = mutate_tags
         self.r_tags = read_tags
+        self.store_func = store_func
 
 # Resource tag represent a variable / object / etc...
 # in the dependency engine. Resource tags with the same
@@ -130,7 +131,11 @@ class ResourceStateQueue(object):
                 self.state = State.N
                 instruction.pc = instruction.pc - 1
                 if instruction.pc == 0:
-                    instruction.fn()
+                    result = instruction.fn()
+
+                    if instruction.store_func is not None:
+                        instruction.store_func(result)
+
                     # fake callback
                     for changed_tag in instruction.m_tags:
                         resource_state_queues[changed_tag].state = State.MR

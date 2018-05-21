@@ -769,35 +769,47 @@ class Executor(object):
             self.memory_plan(feed_shapes)
             self.compile_funcs(feed_shapes)
 
+
         engine = dependency_engine.Dependency_Engine()
 
-        # Traverse graph in topo order and compute values for all nodes.
-        for node in self.topo_order:
-            if node in node_to_val_map:
-                # Skip placeholder nodes. Values already provided by feed_dict.
-                continue
+        def make_resource_tag(n):
+            try:
+                return n.__resource_tag__
+            except AttributeError:
+                t = engine.new_variable()
+                n.__resource_tag__ = t
+                return t
 
-            input_vals = [node_to_val_map[n] for n in node.inputs]
-            node_val = self.node_to_arr_map[node]
-            # node_val is modified in-place
+        try:
+            engine.start_threaded_executor()
+            # Traverse graph in topo order and compute values for all nodes.
+            for node in self.topo_order:
+                if node in node_to_val_map:
+                    # Skip placeholder nodes. Values already provided by feed_dict.
+                    continue
 
-            compute = functools.partial(node.op.compute,
-                node, input_vals, node_val, self.node_to_compiled_func[node])
+                input_vals = [node_to_val_map[n] for n in node.inputs]
+                node_val = self.node_to_arr_map[node]
+                # node_val is modified in-place
 
-            exec_inputs = [engine.new_variable(n.name)
-                for n in node.inputs]
-            exec_outputs = [engine.new_variable(node.name)]
+                compute = functools.partial(node.op.compute,
+                    node, input_vals, node_val, self.node_to_compiled_func[node])
 
-            engine.push(compute, exec_inputs, exec_outputs)
+                exec_inputs = [make_resource_tag(n) for n in node.inputs]
+                exec_outputs = [make_resource_tag(node.name)]
 
-            #import pdb; pdb.set_trace()
+                engine.push(compute, exec_inputs, exec_outputs,
+                    lambda computed_val: node_to_val_map.update({node: computed_val}))
 
-            node_to_val_map[node] = node_val
+                # import pdb; pdb.set_trace()
+                # node_to_val_map[node] = node_val
+        finally:
+            engine.stop_threaded_executor() # blocks until execution is done.
+
         # Collect node values.
         if convert_to_numpy_ret_vals:
             return [node_to_val_map[n].asnumpy() for n in self.eval_node_list]
         return [node_to_val_map[n] for n in self.eval_node_list]
-
 
 
 def gradients(output_node, node_list):
