@@ -95,39 +95,45 @@ class StateWithMemory(object):
         # State Transition Rules:
         # (1) MR -> R -> R -> ... -> MR -> (1,2)
         # (2) MR -> N -> MR -> (1, 2)
-        if self.state == State.N:
-            if state != State.MR:
-                raise Exception("Invalid state transition")
-        elif self.state == State.R:
-            if state == State.N:
-                raise Exception("Invalid state transition")
-            # track length of R chain
-            elif state == State.R:
-                self.r_count += 1
-            else: # MR
-                # must be no more Rs left to transit back to MR
-                if self.r_count != 0:
+        try:
+            if self.state == State.N:
+                if state != State.MR:
                     raise Exception("Invalid state transition")
-        else: # self.state == State.MR:
-            if state == State.R:
-                self.r_count += 1
-        self.state = state
-        self.lock.release()
+            elif self.state == State.R:
+                if state == State.N:
+                    raise Exception("Invalid state transition")
+                # track length of R chain
+                elif state == State.R:
+                    self.r_count += 1
+                else: # MR
+                    # must be no more Rs left to transit back to MR
+                    if self.r_count != 0:
+                        raise Exception("Invalid state transition")
+            else: # self.state == State.MR:
+                if state == State.R:
+                    self.r_count += 1
+            self.state = state
+        finally:
+            self.lock.release()
 
     def isIn(self, state):
         return state == self.state
 
     def restore(self):
         self.lock.acquire()
-        if self.state == State.MR:
-            raise Exception("Invalid state restoration")
-        elif self.state == State.R:
-            self.r_count -= 1
-            if self.r_count == 0:
+        try:
+            if self.state == State.MR:
+                #print self.history
+                raise Exception("Invalid state restoration")
+            elif self.state == State.R:
+                self.r_count -= 1
+                if self.r_count == 0:
+                    self.to(State.MR)
+            else: # self.state == State.N
                 self.to(State.MR)
-        else: # self.state == State.N
-            self.to(State.MR)
-        self.lock.release()
+        finally:
+            self.lock.release()
+
 
 # tells the queues to stop processing
 class StopSignal(object):
@@ -144,13 +150,21 @@ class Instruction(Thread):
         self.r_tags = read_tags
         self.counter_lock = Lock()
 
-    def decrement_pending_counter(self):
+    # decrement the pc counter and returns true if
+    # the counter is zero or false otherwise
+    def decrement_pc_and_is_zero(self):
         self.counter_lock.acquire()
-        self.pc -= 1
-        self.counter_lock.release()
+        try:
+            self.pc -= 1
+            if self.pc == 0:
+                return True
+            else:
+                return False
+        finally:
+            self.counter_lock.release()
 
+    # runs the lambda function it holds
     def run(self):
-        # runs the lambda function it holds
         self.fn()
 
 # Resource tag represent a variable / object / etc...
@@ -202,8 +216,7 @@ class ResourceStateQueue(object):
                 instruction = self.pop()
                 # change state to N
                 self.state.to(State.N)
-                instruction.decrement_pending_counter()
-                if instruction.pc == 0:
+                if instruction.decrement_pc_and_is_zero():
                     # calling the non_threaded version
                     if pool is None:
                         instruction.run()
@@ -226,8 +239,7 @@ class ResourceStateQueue(object):
                 instruction = self.pop()
                 # change state to N
                 self.state.to(State.R)
-                instruction.decrement_pending_counter()
-                if instruction.pc == 0:
+                if instruction.decrement_pc_and_is_zero():
                     # calling the non_threaded version
                     if pool is None:
                         instruction.run()

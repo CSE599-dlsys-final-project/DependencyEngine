@@ -776,11 +776,11 @@ class Executor(object):
             try:
                 return n.__resource_tag__
             except AttributeError:
-                t = engine.new_variable()
+                t = engine.new_variable(n.name)
                 n.__resource_tag__ = t
                 return t
 
-        # engine.start_threaded_executor()
+        engine.start_threaded_executor()
 
         try:
             # Traverse graph in topo order and compute values for all nodes.
@@ -791,25 +791,24 @@ class Executor(object):
 
                 node_val = self.node_to_arr_map[node]
 
-                def exec_func():
+                def exec_func(f_node_to_val_map, f_node, f_node_val, func):
                     # Load inputs, execute native code, store output.
-                    input_vals = [node_to_val_map[n] for n in node.inputs]
+                    input_vals = [f_node_to_val_map[n] for n in f_node.inputs]
+                    f_node.op.compute(
+                        f_node, input_vals, f_node_val, func)
+                    f_node_to_val_map[f_node] = f_node_val
 
-                    node.op.compute(
-                        node, input_vals, node_val, self.node_to_compiled_func[node])
-
-                    node_to_val_map[node] = node_val
-
-                engine.push(exec_func,
+                # capture the current varibles
+                engine.push(functools.partial(exec_func, node_to_val_map, node,
+                    node_val, self.node_to_compiled_func[node]),
                     [get_resource_tag(n) for n in node.inputs],
                     [get_resource_tag(node)])
-
-                for _ in range(100):
-                    engine.naive_executor()
-
         finally:
-            pass
-            # engine.stop_threaded_executor() # blocks until execution is done.
+            engine.stop_threaded_executor() # blocks until execution is done.
+
+        #for _ in range(1000):
+            #engine.naive_executor()
+
         # Collect node values.
         if convert_to_numpy_ret_vals:
             return [node_to_val_map[n].asnumpy() for n in self.eval_node_list]
