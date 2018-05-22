@@ -33,12 +33,12 @@ class Dependency_Engine(object):
 
         return rtag
 
-    def push(self, exec_func, read_tags, mutate_tags, callback=None):
+    def push(self, exec_func, read_tags, mutate_tags):
         # pending count is the number of unique tags
         pending_count = len(set(read_tags + mutate_tags))
         # create instruction based on given parameters
         instruction = Instruction(
-            exec_func, read_tags, mutate_tags, pending_count, callback)
+            exec_func, read_tags, mutate_tags, pending_count)
 
         # push instructions into the queue
         # exclusively read
@@ -138,19 +138,15 @@ class StopSignal(object):
 
 # Stores a lambda function and its dependencies.
 class Instruction(Thread):
-    def __init__(self, exec_func, read_tags, mutate_tags, pending_counter, callback=None):
+    def __init__(self, exec_func, read_tags, mutate_tags, pending_counter):
         self.fn = exec_func
         self.pc = pending_counter
         self.m_tags = mutate_tags
         self.r_tags = read_tags
-        self.callback = callback
 
     def run(self):
         # runs the lambda function it holds
         self.fn()
-        # callback when needed
-        if not self.callback is None:
-            self.callback()
 
 # Resource tag represent a variable / object / etc...
 # in the dependency engine. Resource tags with the same
