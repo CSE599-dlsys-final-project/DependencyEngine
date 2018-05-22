@@ -3,7 +3,7 @@ from __future__ import absolute_import
 
 from queue import Queue
 from enum import Enum
-from threading import Thread, Event, RLock
+from threading import Thread, Event, RLock, Lock
 
 class Dependency_Engine(object):
     def __init__(self):
@@ -125,8 +125,6 @@ class StateWithMemory(object):
             self.r_count -= 1
             if self.r_count == 0:
                 self.to(State.MR)
-            else:
-                self.to(State.R)
         else: # self.state == State.N
             self.to(State.MR)
         self.lock.release()
@@ -139,10 +137,17 @@ class StopSignal(object):
 # Stores a lambda function and its dependencies.
 class Instruction(Thread):
     def __init__(self, exec_func, read_tags, mutate_tags, pending_counter):
+        super(Instruction, self).__init__()
         self.fn = exec_func
         self.pc = pending_counter
         self.m_tags = mutate_tags
         self.r_tags = read_tags
+        self.counter_lock = Lock()
+
+    def decrement_pending_counter(self):
+        self.counter_lock.acquire()
+        self.pc -= 1
+        self.counter_lock.release()
 
     def run(self):
         # runs the lambda function it holds
@@ -167,6 +172,7 @@ class ResourceTag(object):
     def __repr__(self):
         return self.name
 
+
 # Tracks a queue of Instructions and the avaliability of the queue.
 # The state of the queue should always reflect the avaliability of the next
 # element in the queue.
@@ -186,6 +192,7 @@ class ResourceStateQueue(object):
         # no pending instruction
         if self.peek() is None:
             return
+
         ### resolve the next pending instruction
         # mutate or read + mutate
         if tag in self.peek().m_tags:
@@ -195,7 +202,7 @@ class ResourceStateQueue(object):
                 instruction = self.pop()
                 # change state to N
                 self.state.to(State.N)
-                instruction.pc = instruction.pc - 1
+                instruction.decrement_pending_counter()
                 if instruction.pc == 0:
                     # calling the non_threaded version
                     if pool is None:
@@ -219,7 +226,7 @@ class ResourceStateQueue(object):
                 instruction = self.pop()
                 # change state to N
                 self.state.to(State.R)
-                instruction.pc = instruction.pc - 1
+                instruction.decrement_pending_counter()
                 if instruction.pc == 0:
                     # calling the non_threaded version
                     if pool is None:
@@ -232,7 +239,8 @@ class ResourceStateQueue(object):
                         # start the intruction thread and push into the global pool
                         instruction.start()
                         pool.append(instruction)
-
+        else:
+            raise Exception()
 
     ### queue functions
     # get the next element without popping it

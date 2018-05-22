@@ -69,5 +69,66 @@ def test_threaded_dependency():
     engine.stop_threaded_executor()
     print("All done!")
 
+
+def test_known_bug_case():
+    print("******")
+    print("Testing threaded dependency")
+    ### prepare engine
+    engine = dependency_engine.Dependency_Engine()
+    # resource tags
+    a_tag = engine.new_variable("A")
+    b_tag = engine.new_variable("B")
+    c_tag = engine.new_variable("C")
+    d_tag = engine.new_variable("D")
+    z_tag = engine.new_variable("Z")
+
+    class MyInt(object):
+        def __init__(self, num):
+            self.num = num
+
+        def __str__(self):
+            return str(self.num)
+
+    A = MyInt(1)
+    B = MyInt(1)
+    C = MyInt(1)
+    D = MyInt(1)
+    Z = MyInt(1)
+
+    # start execution engine!
+    engine.start_threaded_executor()
+    # Notice the push order is not the same as execution order.
+    # Although "Reading x" is pushed last, its execution is non-deterministic;
+    # we can only gaurentee that "Reading x, modifying y" comes after "Modifying y"
+    def fn1():
+        print("1!")
+        A.num=B.num+C.num
+    def fn2():
+        print("2!")
+        D.num=A.num+Z.num
+    def fn3():
+        print("3!")
+        C.num=D.num
+
+
+    engine.push(fn1, [b_tag, c_tag], [a_tag])
+    engine.push(fn2, [a_tag, z_tag], [d_tag])
+    engine.push(fn2, [a_tag, z_tag], [d_tag])
+    engine.push(fn2, [a_tag, z_tag], [d_tag])
+    engine.push(fn2, [a_tag, z_tag], [d_tag])
+    engine.push(fn2, [a_tag, z_tag], [d_tag])
+    engine.push(fn1, [b_tag, c_tag], [a_tag])
+    engine.push(fn3, [d_tag], [c_tag])
+    # blocking call
+    engine.stop_threaded_executor()
+
+
+    print("A: "+ str(A))
+    print("B: "+ str(B))
+    print("C: "+ str(C))
+    print("D: "+ str(D))
+    print("Z: "+ str(Z))
+
+test_known_bug_case()
 test_matrix_elementwise_add_threaded()
 test_threaded_dependency()
