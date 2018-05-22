@@ -3,10 +3,11 @@ from __future__ import absolute_import
 
 from queue import Queue
 from enum import Enum
-from threading import Thread, Event
+from threading import Thread, Event, RLock
 
 class Dependency_Engine(object):
     def __init__(self):
+        # This is a mapping of ResourceTag -> ResourceStateQueue
         self.resource_state_queues = {}
 
         # We need a way to tell all the queues to stop working,
@@ -17,6 +18,9 @@ class Dependency_Engine(object):
         # All of the queues will share the same stop signal, so that
         # when we set the flag to true, all workers are signaled.
         self.stop_signal = StopSignal()
+
+        # This is a pool of running instructions.
+        self.running_instruction_thread_pool = []
 
     def new_variable(self, name = None):
         rtag = ResourceTag(name)
@@ -65,9 +69,13 @@ class Dependency_Engine(object):
     def stop_threaded_executor(self):
         # tell the queues to stop
         self.stop_signal.stop = True
+        # have all the queues finish processing
         for tag in self.resource_state_queues:
             # this will block until this queue's work is done
             self.resource_state_queues[tag].stop_listening()
+        # have all the instruction finish processing
+        for instruction in self.running_instruction_thread_pool:
+            instruction.join()
 
 # the state of a resource queue
 class State(Enum):
@@ -75,20 +83,74 @@ class State(Enum):
     R = 1
     MR = 2
 
+class StateWithMemory(object):
+    def __init__(self):
+        self.state = State.MR
+        # count how many consecutive R states are in the transition chain
+        self.r_count = 0
+        self.lock = RLock()
+
+    def to(self, state):
+        self.lock.acquire()
+        # State Transition Rules:
+        # (1) MR -> R -> R -> ... -> MR -> (1,2)
+        # (2) MR -> N -> MR -> (1, 2)
+        if self.state == State.N:
+            if state != State.MR:
+                raise Exception("Invalid state transition")
+        elif self.state == State.R:
+            if state == State.N:
+                raise Exception("Invalid state transition")
+            # track length of R chain
+            elif state == State.R:
+                self.r_count += 1
+            else: # MR
+                # must be no more Rs left to transit back to MR
+                if self.r_count != 0:
+                    raise Exception("Invalid state transition")
+        else: # self.state == State.MR:
+            if state == State.R:
+                self.r_count += 1
+        self.state = state
+        self.lock.release()
+
+    def isIn(self, state):
+        return state == self.state
+
+    def restore(self):
+        self.lock.acquire()
+        if self.state == State.MR:
+            raise Exception("Invalid state restoration")
+        elif self.state == State.R:
+            self.r_count -= 1
+            if self.r_count == 0:
+                self.to(State.MR)
+            else:
+                self.to(State.R)
+        else: # self.state == State.N
+            self.to(State.MR)
+        self.lock.release()
+
 # tells the queues to stop processing
 class StopSignal(object):
-    def __init__(self, stop = False):
+    def __init__(self, stop = True):
         self.stop = stop
 
-
 # Stores a lambda function and its dependencies.
-class Instruction(object):
+class Instruction(Thread):
     def __init__(self, exec_func, read_tags, mutate_tags, pending_counter, callback=None):
         self.fn = exec_func
         self.pc = pending_counter
         self.m_tags = mutate_tags
         self.r_tags = read_tags
         self.callback = callback
+
+    def run(self):
+        # runs the lambda function it holds
+        self.fn()
+        # callback when needed
+        if not self.callback is None:
+            self.callback()
 
 # Resource tag represent a variable / object / etc...
 # in the dependency engine. Resource tags with the same
@@ -120,10 +182,11 @@ class ResourceStateQueue(object):
         #   N state - not ready for read/mutate
         #   R state - only ready for read
         #   MR state - ready for read/mutate
-        self.state = State.MR
+        #self.state = State.MR
+        self.state = StateWithMemory()
 
     # handles the next pending intruction on this queue
-    def handle_next_pending_instruction(self, tag, resource_state_queues):
+    def handle_next_pending_instruction(self, tag, resource_state_queues, pool = None):
         # no pending instruction
         if self.peek() is None:
             return
@@ -131,46 +194,49 @@ class ResourceStateQueue(object):
         # mutate or read + mutate
         if tag in self.peek().m_tags:
             # can do stuff
-            if self.state == State.MR:
+            if self.state.isIn(State.MR):
                 # pop
                 instruction = self.pop()
                 # change state to N
-                self.state = State.N
+                self.state.to(State.N)
                 instruction.pc = instruction.pc - 1
                 if instruction.pc == 0:
-                    instruction.fn()
+                    # calling the non_threaded version
+                    if pool is None:
+                        instruction.run()
+                        # fake callback
+                        changed_tags = set(instruction.m_tags + instruction.r_tags)
+                        for ctag in changed_tags:
+                            resource_state_queues[ctag].state.restore()
+                    else:
+                        # start the intruction thread and push into the global pool
+                        instruction.start()
+                        pool.append(instruction)
 
-                    if instruction.callback is not None:
-                        instruction.callback()
-
-                    # fake callback
-                    for changed_tag in instruction.m_tags:
-                        resource_state_queues[changed_tag].state = State.MR
-                    for changed_tag in instruction.r_tags:
-                        resource_state_queues[changed_tag].state = State.MR
         # read only
         elif (tag in self.peek().r_tags) \
             and (not tag in self.peek().m_tags):
             # can do stuff
-            if self.state == State.MR or \
-                self.state == State.R:
-                prev = self.state
+            if self.state.isIn(State.MR) or \
+                self.state.isIn(State.R):
                 # pop
                 instruction = self.pop()
                 # change state to N
-                self.state = State.R
+                self.state.to(State.R)
                 instruction.pc = instruction.pc - 1
                 if instruction.pc == 0:
-                    instruction.fn()
+                    # calling the non_threaded version
+                    if pool is None:
+                        instruction.run()
+                        # fake callback
+                        changed_tags = set(instruction.m_tags + instruction.r_tags)
+                        for ctag in changed_tags:
+                            resource_state_queues[ctag].state.restore()
+                    else:
+                        # start the intruction thread and push into the global pool
+                        instruction.start()
+                        pool.append(instruction)
 
-                    if instruction.callback is not None:
-                        instruction.callback()
-
-                    # fake callback
-                    for changed_tag in instruction.m_tags:
-                        resource_state_queues[changed_tag].state = State.MR
-                    for changed_tag in instruction.r_tags:
-                        resource_state_queues[changed_tag].state = prev
 
     ### queue functions
     # get the next element without popping it
@@ -189,7 +255,7 @@ class ResourceStateQueue(object):
 
     def __repr__(self):
         num_to_state = {State.N:"N", State.R:"R", State.MR:"MR"}
-        return "ResourceStateQueue: " + num_to_state[self.state];
+        return "ResourceStateQueue: " + num_to_state[self.state.state];
 
 class ThreadedResourceStateQueue(ResourceStateQueue):
     def __init__(self, stop_signal):

@@ -222,3 +222,4 @@ def test_mnist_logreg():
 
 
 test_matrix_elementwise_add_naive()
+test_mnist_logreg()
