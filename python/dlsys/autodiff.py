@@ -780,9 +780,7 @@ class Executor(object):
                 n.__resource_tag__ = t
                 return t
 
-        engine.start_threaded_executor()
-
-        try:
+        with engine.threaded_executor():
             # Traverse graph in topo order and compute values for all nodes.
             for node in self.topo_order:
                 if node in node_to_val_map:
@@ -803,11 +801,6 @@ class Executor(object):
                     node_val, self.node_to_compiled_func[node]),
                     [get_resource_tag(n) for n in node.inputs],
                     [get_resource_tag(node)])
-        finally:
-            engine.stop_threaded_executor() # blocks until execution is done.
-
-        #for _ in range(1000):
-            #engine.naive_executor()
 
         # Collect node values.
         if convert_to_numpy_ret_vals:

@@ -4,6 +4,7 @@ from __future__ import absolute_import
 from queue import Queue
 from enum import Enum
 from threading import Thread, Event, RLock, Lock
+from contextlib import contextmanager
 
 class Dependency_Engine(object):
     def __init__(self):
@@ -76,6 +77,12 @@ class Dependency_Engine(object):
         # have all the instruction finish processing
         for instruction in self.running_instruction_thread_pool:
             instruction.join()
+
+    @contextmanager
+    def threaded_executor(self):
+        self.start_threaded_executor()
+        yield
+        self.stop_threaded_executor()
 
 # the state of a resource queue
 class State(Enum):
