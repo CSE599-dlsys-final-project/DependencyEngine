@@ -24,7 +24,7 @@ def test_matrix_elementwise_add_threaded():
     arr_z = tvm.nd.array(z, ctx=ctx)
 
     ### prepare engine
-    engine = dependency_engine.Dependency_Engine()
+    engine = dependency_engine.DependencyEngine()
     # resource tags
     x_tag = engine.new_variable("X")
     y_tag = engine.new_variable("Y")
@@ -52,7 +52,7 @@ def test_threaded_dependency():
     print("******")
     print("Testing threaded dependency")
     ### prepare engine
-    engine = dependency_engine.Dependency_Engine()
+    engine = dependency_engine.DependencyEngine()
     # resource tags
     x_tag = engine.new_variable("X")
     y_tag = engine.new_variable("Y")
@@ -74,7 +74,7 @@ def test_known_bug_case():
     print("******")
     print("Testing threaded dependency")
     ### prepare engine
-    engine = dependency_engine.Dependency_Engine()
+    engine = dependency_engine.DependencyEngine()
     # resource tags
     a_tag = engine.new_variable("A")
     b_tag = engine.new_variable("B")
@@ -110,15 +110,21 @@ def test_known_bug_case():
         print("3!")
         C.num=D.num
 
+    for _i in range(1, 4):
+        def fn(i):
+            if i == 1:
+                fn1()
+            elif i == 2:
+                fn2()
+            else:
+                fn3()
+        if _i == 1:
+            engine.push(lambda: fn(_i), [b_tag, c_tag], [a_tag])
+        elif _i == 2:
+            engine.push(lambda: fn(_i), [a_tag, z_tag], [d_tag])
+        else:
+            engine.push(lambda: fn(_i), [d_tag], [c_tag])
 
-    engine.push(fn1, [b_tag, c_tag], [a_tag])
-    engine.push(fn2, [a_tag, z_tag], [d_tag])
-    engine.push(fn2, [a_tag, z_tag], [d_tag])
-    engine.push(fn2, [a_tag, z_tag], [d_tag])
-    engine.push(fn2, [a_tag, z_tag], [d_tag])
-    engine.push(fn2, [a_tag, z_tag], [d_tag])
-    engine.push(fn1, [b_tag, c_tag], [a_tag])
-    engine.push(fn3, [d_tag], [c_tag])
     # blocking call
     engine.stop_threaded_executor()
 

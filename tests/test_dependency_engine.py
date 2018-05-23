@@ -33,7 +33,7 @@ def test_matrix_elementwise_add_naive():
     arr_z = tvm.nd.array(z, ctx=ctx)
 
     ### prepare engine
-    engine = dependency_engine.Dependency_Engine()
+    engine = dependency_engine.DependencyEngine()
     # resource tags
     x_tag = engine.new_variable("X")
     y_tag = engine.new_variable("Y")

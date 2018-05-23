@@ -593,7 +593,7 @@ class Executor(object):
         self.node_to_arr_map = None
         self.node_to_compiled_func = None
         self.feed_shapes = None
-        self.engine = dependency_engine.Dependency_Engine()
+        self.engine = dependency_engine.DependencyEngine()
 
     def infer_shape(self, feed_shapes):
         """Given shapes of feed_dict nodes, infer shape for all nodes in graph.

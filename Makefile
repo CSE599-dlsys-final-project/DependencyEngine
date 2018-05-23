@@ -1,10 +1,10 @@
 test_all: test_dependency_engine test_threading
 
 test_dependency_engine:
-	python tests/test_dependency_engine.py
+	python3 tests/test_dependency_engine.py
 
 test_threading:
-	python tests/test_threading.py
+	python3 tests/test_threading.py
 
 export:
 	PYTHONPATH="${PYTHONPATH}:/Users/macbook/git/DependencyEngine/python"

@@ -6,8 +6,8 @@ from enum import Enum
 from threading import Thread, Event, RLock, Lock, Condition
 from contextlib import contextmanager
 
-class Dependency_Engine(object):
-    def __init__(self):
+class DependencyEngine(object):
+    def __init__(self, concurrent_instructions = True):
         # This is a mapping of ResourceTag -> ResourceStateQueue
         self.resource_state_queues = {}
 
@@ -21,12 +21,16 @@ class Dependency_Engine(object):
         self.stop_signal = StopSignal()
 
         # This is a pool of running instructions.
-        self.running_instruction_thread_pool = []
+        if concurrent_instructions:
+            self.running_instruction_thread_pool = []
+        else:
+            self.running_instruction_thread_pool = None
 
     def new_variable(self, name = None):
         rtag = ResourceTag(name)
 
-        q = ThreadedResourceStateQueue(self.stop_signal)
+        q = ThreadedResourceStateQueue(self.stop_signal,
+            self.running_instruction_thread_pool)
         self.resource_state_queues[rtag] = q
 
         if not self.stop_signal.stop:
@@ -39,7 +43,8 @@ class Dependency_Engine(object):
         pending_count = len(set(read_tags + mutate_tags))
         # create instruction based on given parameters
         instruction = Instruction(
-            exec_func, read_tags, mutate_tags, pending_count)
+            exec_func, read_tags, mutate_tags, pending_count,
+            self.resource_state_queues)
 
         # push instructions into the queue
         # exclusively read
@@ -142,12 +147,14 @@ class StopSignal(object):
 
 # Stores a lambda function and its dependencies.
 class Instruction(Thread):
-    def __init__(self, exec_func, read_tags, mutate_tags, pending_counter):
+    def __init__(self, exec_func, read_tags, mutate_tags, pending_counter,
+                resource_state_queues):
         super(Instruction, self).__init__()
         self.fn = exec_func
         self.pc = pending_counter
         self.m_tags = mutate_tags
         self.r_tags = read_tags
+        self.resource_state_queues = resource_state_queues
         self.counter_lock = Lock()
 
     # decrement the pc counter and returns true if
@@ -160,6 +167,15 @@ class Instruction(Thread):
     # runs the lambda function it holds
     def run(self):
         self.fn()
+        self.restore_states()
+
+    # restore the states that was changed previously
+    # by the resource state queue
+    def restore_states(self):
+        changed_tags = set(self.m_tags + self.r_tags)
+        for ctag in changed_tags:
+            self.resource_state_queues[ctag].state.restore()
+            self.resource_state_queues[ctag].notify()
 
 # Resource tag represent a variable / object / etc...
 # in the dependency engine. Resource tags with the same
@@ -220,10 +236,6 @@ class ResourceStateQueue(object):
                     # calling the non_threaded version
                     if pool is None:
                         instruction.run()
-                        # fake callback
-                        changed_tags = set(instruction.m_tags + instruction.r_tags)
-                        for ctag in changed_tags:
-                            resource_state_queues[ctag].state.restore()
                     else:
                         # start the intruction thread and push into the global pool
                         instruction.start()
@@ -245,10 +257,6 @@ class ResourceStateQueue(object):
                     # calling the non_threaded version
                     if pool is None:
                         instruction.run()
-                        # fake callback
-                        changed_tags = set(instruction.m_tags + instruction.r_tags)
-                        for ctag in changed_tags:
-                            resource_state_queues[ctag].state.restore()
                     else:
                         # start the intruction thread and push into the global pool
                         instruction.start()
@@ -259,6 +267,11 @@ class ResourceStateQueue(object):
             raise Exception()
 
         return False
+
+    # wakes the queue up
+    def notify(self):
+        with self.queueActivity:
+            self.queueActivity.notify()
 
     ### queue functions
     # get the next element without popping it
@@ -282,11 +295,13 @@ class ResourceStateQueue(object):
         return "ResourceStateQueue: " + num_to_state[self.state.state];
 
 class ThreadedResourceStateQueue(ResourceStateQueue):
-    def __init__(self, stop_signal):
+    def __init__(self, stop_signal, intruction_thread_pool = None):
         super(ThreadedResourceStateQueue, self).__init__()
         self.thread = None
         # if stop_signal.stop is set to be true, then stop processing
         self.stop_signal = stop_signal
+        # the pool of running instruction threads
+        self.pool = intruction_thread_pool
 
     # start a thread that handles queue logic
     def start_listening(self, tag, resource_state_queues):
@@ -300,8 +315,12 @@ class ThreadedResourceStateQueue(ResourceStateQueue):
     # until the stop_signal is set and all current works are done
     def listen(self, tag, resource_state_queues):
         def handle_instruction():
-            if self.handle_next_pending_instruction(tag, resource_state_queues):
+            if self.handle_next_pending_instruction(tag, resource_state_queues,
+                                                    self.pool):
                 self.queue.task_done()
+                return True
+            else:
+                return False
 
         while True:
             should_wake = lambda: (not self.queue.empty()
@@ -310,14 +329,13 @@ class ThreadedResourceStateQueue(ResourceStateQueue):
             with self.queueActivity:
                 self.queueActivity.wait_for(should_wake)
 
-                if self.stop_signal.stop:
-                    # Drain the queue and exit.
-                    while not self.queue.empty():
-                        handle_instruction()
+                if self.stop_signal.stop and self.queue.empty():
                     return
                 else:
                     # Service single item and continue.
-                    handle_instruction()
+                    # handle consecutive reads
+                    while handle_instruction():
+                        pass
 
     # signals the thread to stop
     # blocks until all works are done
