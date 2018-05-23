@@ -1,9 +1,9 @@
 ''' A library to track dependency of operations '''
 from __future__ import absolute_import
 
-from queue import Queue
+import queue
 from enum import Enum
-from threading import Thread, Event, RLock, Lock
+from threading import Thread, Event, RLock, Lock, Condition
 from contextlib import contextmanager
 
 class Dependency_Engine(object):
@@ -98,11 +98,10 @@ class StateWithMemory(object):
         self.lock = RLock()
 
     def to(self, state):
-        self.lock.acquire()
         # State Transition Rules:
         # (1) MR -> R -> R -> ... -> MR -> (1,2)
         # (2) MR -> N -> MR -> (1, 2)
-        try:
+        with self.lock:
             if self.state == State.N:
                 if state != State.MR:
                     raise Exception("Invalid state transition")
@@ -120,15 +119,12 @@ class StateWithMemory(object):
                 if state == State.R:
                     self.r_count += 1
             self.state = state
-        finally:
-            self.lock.release()
 
     def isIn(self, state):
         return state == self.state
 
     def restore(self):
-        self.lock.acquire()
-        try:
+        with self.lock:
             if self.state == State.MR:
                 #print self.history
                 raise Exception("Invalid state restoration")
@@ -138,9 +134,6 @@ class StateWithMemory(object):
                     self.to(State.MR)
             else: # self.state == State.N
                 self.to(State.MR)
-        finally:
-            self.lock.release()
-
 
 # tells the queues to stop processing
 class StopSignal(object):
@@ -160,15 +153,9 @@ class Instruction(Thread):
     # decrement the pc counter and returns true if
     # the counter is zero or false otherwise
     def decrement_pc_and_is_zero(self):
-        self.counter_lock.acquire()
-        try:
+        with self.counter_lock:
             self.pc -= 1
-            if self.pc == 0:
-                return True
-            else:
-                return False
-        finally:
-            self.counter_lock.release()
+            return self.pc == 0
 
     # runs the lambda function it holds
     def run(self):
@@ -200,7 +187,7 @@ class ResourceTag(object):
 class ResourceStateQueue(object):
     def __init__(self):
         # the queue is consisted of pending instructions
-        self.queue = Queue()
+        self.queue = queue.Queue()
         # integer represent state of the resource:
         #   N state - not ready for read/mutate
         #   R state - only ready for read
@@ -208,21 +195,27 @@ class ResourceStateQueue(object):
         #self.state = State.MR
         self.state = StateWithMemory()
 
-    # handles the next pending intruction on this queue
+        # Used for either new item on queue, or needing to stop.
+        self.queueActivity = Condition()
+
     def handle_next_pending_instruction(self, tag, resource_state_queues, pool = None):
+        """
+        handles the next pending intruction on this queue.
+        Returns whether it popped and handled an instruction.
+        """
         # no pending instruction
         if self.peek() is None:
-            return
+            return False
 
         ### resolve the next pending instruction
         # mutate or read + mutate
         if tag in self.peek().m_tags:
             # can do stuff
             if self.state.isIn(State.MR):
-                # pop
-                instruction = self.pop()
                 # change state to N
                 self.state.to(State.N)
+                instruction = self.pop()
+
                 if instruction.decrement_pc_and_is_zero():
                     # calling the non_threaded version
                     if pool is None:
@@ -235,6 +228,8 @@ class ResourceStateQueue(object):
                         # start the intruction thread and push into the global pool
                         instruction.start()
                         pool.append(instruction)
+
+                return True
 
         # read only
         elif (tag in self.peek().r_tags) \
@@ -242,10 +237,10 @@ class ResourceStateQueue(object):
             # can do stuff
             if self.state.isIn(State.MR) or \
                 self.state.isIn(State.R):
-                # pop
-                instruction = self.pop()
                 # change state to N
                 self.state.to(State.R)
+                instruction = self.pop()
+
                 if instruction.decrement_pc_and_is_zero():
                     # calling the non_threaded version
                     if pool is None:
@@ -258,8 +253,12 @@ class ResourceStateQueue(object):
                         # start the intruction thread and push into the global pool
                         instruction.start()
                         pool.append(instruction)
+
+                return True
         else:
             raise Exception()
+
+        return False
 
     ### queue functions
     # get the next element without popping it
@@ -270,7 +269,9 @@ class ResourceStateQueue(object):
 
     # push the next instruction into the queue
     def push(self, instruction):
-        self.queue.put(instruction)
+        with self.queueActivity:
+            self.queue.put(instruction)
+            self.queueActivity.notify()
 
     # push the next instruction into the queue
     def pop(self):
@@ -298,17 +299,33 @@ class ThreadedResourceStateQueue(ResourceStateQueue):
     # continue to listen for new instructions
     # until the stop_signal is set and all current works are done
     def listen(self, tag, resource_state_queues):
-        while(True):
-            # check the stop signal and if the queue is done with instructions
-            if (self.stop_signal.stop) and (self.peek() is None):
-                break
-            else:
-                # keep going!
-                self.handle_next_pending_instruction(tag, resource_state_queues)
+        def handle_instruction():
+            if self.handle_next_pending_instruction(tag, resource_state_queues):
+                self.queue.task_done()
+
+        while True:
+            should_wake = lambda: (not self.queue.empty()
+                or self.stop_signal.stop)
+
+            with self.queueActivity:
+                self.queueActivity.wait_for(should_wake)
+
+                if self.stop_signal.stop:
+                    # Drain the queue and exit.
+                    while not self.queue.empty():
+                        handle_instruction()
+                    return
+                else:
+                    # Service single item and continue.
+                    handle_instruction()
 
     # signals the thread to stop
     # blocks until all works are done
     def stop_listening(self):
+        # The caller (probably) changed the stop signal. Notify our waiting thread.
+        with self.queueActivity:
+            self.queueActivity.notify()
+
         # no thread is running
         if self.thread is None:
             raise Exception("No thread running.")

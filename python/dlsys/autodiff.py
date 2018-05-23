@@ -770,20 +770,19 @@ class Executor(object):
             self.memory_plan(feed_shapes)
             self.compile_funcs(feed_shapes)
 
-        engine = self.engine
-
         def get_resource_tag(n):
             try:
                 return n.__resource_tag__
             except AttributeError:
-                t = engine.new_variable(n.name)
+                t = self.engine.new_variable()
                 n.__resource_tag__ = t
                 return t
 
-        with engine.threaded_executor():
+        with self.engine.threaded_executor():
             # Traverse graph in topo order and compute values for all nodes.
+
             for node in self.topo_order:
-                if node in node_to_val_map:
+                if node in node_to_val_map: #  or node in seen_nodes:
                     # Skip placeholder nodes. Values already provided by feed_dict.
                     continue
 
@@ -792,12 +791,11 @@ class Executor(object):
                 def exec_func(f_node_to_val_map, f_node, f_node_val, func):
                     # Load inputs, execute native code, store output.
                     input_vals = [f_node_to_val_map[n] for n in f_node.inputs]
-                    f_node.op.compute(
-                        f_node, input_vals, f_node_val, func)
+                    f_node.op.compute(f_node, input_vals, f_node_val, func)
                     f_node_to_val_map[f_node] = f_node_val
 
                 # capture the current varibles
-                engine.push(functools.partial(exec_func, node_to_val_map, node,
+                self.engine.push(functools.partial(exec_func, node_to_val_map, node,
                     node_val, self.node_to_compiled_func[node]),
                     [get_resource_tag(n) for n in node.inputs],
                     [get_resource_tag(node)])
@@ -805,6 +803,7 @@ class Executor(object):
         # Collect node values.
         if convert_to_numpy_ret_vals:
             return [node_to_val_map[n].asnumpy() for n in self.eval_node_list]
+
         return [node_to_val_map[n] for n in self.eval_node_list]
 
 
