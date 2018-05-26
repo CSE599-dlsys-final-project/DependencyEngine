@@ -8,6 +8,8 @@ import tvm
 from . import tvm_op
 from . import dependency_engine
 
+import dependencyengine # <-- Cython module.
+
 class Node(object):
     """Node in a computation graph."""
     def __init__(self):
@@ -593,7 +595,7 @@ class Executor(object):
         self.node_to_arr_map = None
         self.node_to_compiled_func = None
         self.feed_shapes = None
-        self.engine = dependency_engine.DependencyEngine()
+        self.engine = dependencyengine.DependencyQueue()
 
     def infer_shape(self, feed_shapes):
         """Given shapes of feed_dict nodes, infer shape for all nodes in graph.
@@ -627,8 +629,6 @@ class Executor(object):
 
             # now infer the node's shape
             self.node_to_shape_map[node] = node.op.infer_shape(node, input_shapes)
-
-
 
     def memory_plan(self, feed_shapes):
         """Allocates tvm.nd.array for every node except feed_dict nodes.
@@ -778,7 +778,8 @@ class Executor(object):
                 n.__resource_tag__ = t
                 return t
 
-        with self.engine.threaded_executor():
+        self.engine.start()
+        try:
             # Traverse graph in topo order and compute values for all nodes.
 
             for node in self.topo_order:
@@ -795,10 +796,12 @@ class Executor(object):
                     f_node_to_val_map[f_node] = f_node_val
 
                 # capture the current varibles
-                self.engine.push(functools.partial(exec_func, node_to_val_map, node,
-                    node_val, self.node_to_compiled_func[node]),
+                self.engine.push(
+                    functools.partial(exec_func, node_to_val_map, node, node_val, self.node_to_compiled_func[node]),
                     [get_resource_tag(n) for n in node.inputs],
                     [get_resource_tag(node)])
+        finally:
+            self.engine.stop()
 
         # Collect node values.
         if convert_to_numpy_ret_vals:

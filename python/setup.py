@@ -5,10 +5,13 @@ from distutils.extension import Extension
 
 from Cython.Build import cythonize
 
+compile_args = ['-g', '-std=c++11', '-stdlib=libc++']
+
 cppExtension = Extension(
     "dependencyengine",
     ["dlsys/*.pyx", "dlsys/cpp/DependencyEngine.cpp"],
-    include_dirs=[".", "dlsys/cpp"]
+    include_dirs=[".", "dlsys/cpp"],
+    extra_compile_args=compile_args
 )
 
 setup(

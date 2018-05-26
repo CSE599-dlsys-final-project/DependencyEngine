@@ -1,5 +1,66 @@
-#include "DependencyEngine.hpp"
+#include <memory>
+#include <cassert>
+#include <iostream>
 
-std::string DependencyEngine::getTen() {
-    return "ten";
+#include "DependencyEngine.hpp"
+#include "Instruction.hpp"
+
+void DependencyEngine::push(callbackType execFunc,
+    std::set<long>& readTags,
+    std::set<long>& mutateTags) {
+
+    std::set<long> both;
+
+    both.insert(readTags.begin(), readTags.end());
+    both.insert(mutateTags.begin(), mutateTags.end());
+    int pendingCount = both.size();
+
+    auto instruction = std::make_shared<Instruction>(execFunc,
+        readTags, mutateTags, pendingCount);
+
+    for (long readTag : readTags) {
+        if (mutateTags.count(readTag) == 0) {
+            std::shared_ptr<ResourceStateQueue> tagQueue = this->queues.at(readTag);
+            assert(tagQueue != nullptr);
+            tagQueue->push(instruction);
+        }
+    }
+
+    for (long mutateTag : mutateTags) {
+        std::shared_ptr<ResourceStateQueue> tagQueue = this->queues.at(mutateTag);
+        assert(tagQueue != nullptr);
+        tagQueue->push(instruction);
+    }
+
+    std::cout << "PUSH " << std::endl;
+}
+
+long DependencyEngine::newVariable() {
+    long tag = this->currentTag++;
+
+    std::shared_ptr<ResourceStateQueue> queue = std::make_shared<ResourceStateQueue>();
+    this->queues[tag] = queue;
+
+    if (!this->shouldStop) {
+        // TODO queue->startListening()...
+    }
+
+    return tag;
+}
+
+void DependencyEngine::start() {
+    this->shouldStop = false;
+
+    for (const auto& entry : this->queues) {
+        // entry.second->startListening();
+    }
+}
+
+void DependencyEngine::stop() {
+    this->shouldStop = true;
+
+    // TODO: stop listening on each ResourceStateQueue, join on
+    // all threads.
+
+
 }
