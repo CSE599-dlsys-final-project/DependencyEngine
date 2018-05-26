@@ -1,17 +1,19 @@
 #!/usr/bin/env python
 
+import glob
+
 from distutils.core import setup
 from distutils.extension import Extension
 
 from Cython.Build import cythonize
 
-compile_args = ['-g', '-std=c++11', '-stdlib=libc++']
+cpp_source_files = glob.glob("dlsys/cpp/*.cpp")
 
 cppExtension = Extension(
     "dependencyengine",
-    ["dlsys/*.pyx", "dlsys/cpp/DependencyEngine.cpp"],
+    ["dlsys/*.pyx"] + cpp_source_files,
     include_dirs=[".", "dlsys/cpp"],
-    extra_compile_args=compile_args
+    extra_compile_args=['-g', '-std=c++14', '-stdlib=libc++']
 )
 
 setup(

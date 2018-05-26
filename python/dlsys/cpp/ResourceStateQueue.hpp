@@ -9,11 +9,21 @@
 
 class ResourceStateQueue {
 public:
-    void push(std::shared_ptr<Instruction> instruction) {
-        this->queue.push(instruction);
-    }
+    ResourceStateQueue(std::atomic<bool>& shouldStop, long tag)
+        : shouldStop(shouldStop), tag(tag)
+    { }
+
+    void push(std::shared_ptr<Instruction> instruction);
+    void listen();
+    void notify();
+    void startListening();
+    void stopListening();
+    bool handleNextPendingInstruction();
 
 private:
     std::queue<std::shared_ptr<Instruction>> queue;
-    std::condition_variable cv;
+    std::mutex queueMutex;
+    std::condition_variable queueActivity;
+    std::atomic<bool>& shouldStop;
+    long tag;
 };

@@ -10,7 +10,6 @@ void DependencyEngine::push(callbackType execFunc,
     std::set<long>& mutateTags) {
 
     std::set<long> both;
-
     both.insert(readTags.begin(), readTags.end());
     both.insert(mutateTags.begin(), mutateTags.end());
     int pendingCount = both.size();
@@ -31,14 +30,14 @@ void DependencyEngine::push(callbackType execFunc,
         assert(tagQueue != nullptr);
         tagQueue->push(instruction);
     }
-
-    std::cout << "PUSH " << std::endl;
 }
 
 long DependencyEngine::newVariable() {
     long tag = this->currentTag++;
 
-    std::shared_ptr<ResourceStateQueue> queue = std::make_shared<ResourceStateQueue>();
+    std::shared_ptr<ResourceStateQueue> queue =
+        std::make_shared<ResourceStateQueue>(this->shouldStop, tag);
+
     this->queues[tag] = queue;
 
     if (!this->shouldStop) {

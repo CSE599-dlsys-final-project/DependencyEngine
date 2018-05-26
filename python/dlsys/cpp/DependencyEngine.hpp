@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <set>
 #include <memory>
+#include <atomic>
 
 #include "Instruction.hpp"
 #include "ResourceStateQueue.hpp"
@@ -24,5 +25,5 @@ public:
 private:
     std::unordered_map<long, std::shared_ptr<ResourceStateQueue>> queues;
     long currentTag;
-    bool shouldStop;
+    std::atomic<bool> shouldStop;
 };
