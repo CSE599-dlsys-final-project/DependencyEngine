@@ -41,7 +41,7 @@ long DependencyEngine::newVariable() {
     this->queues[tag] = queue;
 
     if (!this->shouldStop) {
-        // TODO queue->startListening()...
+        queue->startListening();
     }
 
     return tag;
@@ -51,7 +51,7 @@ void DependencyEngine::start() {
     this->shouldStop = false;
 
     for (const auto& entry : this->queues) {
-        // entry.second->startListening();
+        entry.second->startListening();
     }
 }
 
@@ -60,6 +60,4 @@ void DependencyEngine::stop() {
 
     // TODO: stop listening on each ResourceStateQueue, join on
     // all threads.
-
-
 }
