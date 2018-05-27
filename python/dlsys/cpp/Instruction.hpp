@@ -7,7 +7,7 @@ using callbackType = long; // Revisit this.
 class Instruction {
 public:
     Instruction(callbackType execFunc,
-        std::set<long>& readTags, std::set<long>& mutateTags,
+        const std::set<long>& readTags, const std::set<long>& mutateTags,
         int pendingCount):
         execFunc(execFunc), readTags(readTags), mutateTags(mutateTags),
         pendingCount(pendingCount)

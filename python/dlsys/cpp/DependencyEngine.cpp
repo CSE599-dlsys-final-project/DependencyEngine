@@ -6,8 +6,8 @@
 #include "Instruction.hpp"
 
 void DependencyEngine::push(callbackType execFunc,
-    std::set<long>& readTags,
-    std::set<long>& mutateTags) {
+    const std::set<long>& readTags,
+    const std::set<long>& mutateTags) {
 
     std::set<long> both;
     both.insert(readTags.begin(), readTags.end());
@@ -19,15 +19,13 @@ void DependencyEngine::push(callbackType execFunc,
 
     for (long readTag : readTags) {
         if (mutateTags.count(readTag) == 0) {
-            std::shared_ptr<ResourceStateQueue> tagQueue = this->queues.at(readTag);
-            assert(tagQueue != nullptr);
+            std::unique_ptr<ResourceStateQueue>& tagQueue = this->queues.at(readTag);
             tagQueue->push(instruction);
         }
     }
 
     for (long mutateTag : mutateTags) {
-        std::shared_ptr<ResourceStateQueue> tagQueue = this->queues.at(mutateTag);
-        assert(tagQueue != nullptr);
+        std::unique_ptr<ResourceStateQueue>& tagQueue = this->queues.at(mutateTag);
         tagQueue->push(instruction);
     }
 }
@@ -35,13 +33,10 @@ void DependencyEngine::push(callbackType execFunc,
 long DependencyEngine::newVariable() {
     long tag = this->currentTag++;
 
-    std::shared_ptr<ResourceStateQueue> queue =
-        std::make_shared<ResourceStateQueue>(this->shouldStop, tag);
-
-    this->queues[tag] = queue;
+    this->queues[tag] = std::make_unique<ResourceStateQueue>(this->shouldStop, tag);
 
     if (!this->shouldStop) {
-        queue->startListening();
+        this->queues[tag]->startListening();
     }
 
     return tag;

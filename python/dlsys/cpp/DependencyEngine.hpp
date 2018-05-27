@@ -15,15 +15,15 @@ public:
     { }
 
     void push(callbackType execFunc,
-        std::set<long>& readTags,
-        std::set<long>& mutateTags);
+        const std::set<long>& readTags,
+        const std::set<long>& mutateTags);
 
     long newVariable();
 
     void start();
     void stop();
 private:
-    std::unordered_map<long, std::shared_ptr<ResourceStateQueue>> queues;
+    std::unordered_map<long, std::unique_ptr<ResourceStateQueue>> queues;
     long currentTag;
     std::atomic<bool> shouldStop;
 };
