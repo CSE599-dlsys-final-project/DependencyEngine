@@ -778,8 +778,7 @@ class Executor(object):
                 n.__resource_tag__ = t
                 return t
 
-        self.engine.start()
-        try:
+        with self.engine.threaded_executor():
             # Traverse graph in topo order and compute values for all nodes.
 
             for node in self.topo_order:
@@ -789,19 +788,12 @@ class Executor(object):
 
                 node_val = self.node_to_arr_map[node]
 
-                def exec_func(f_node_to_val_map, f_node, f_node_val, func):
-                    # Load inputs, execute native code, store output.
-                    input_vals = [f_node_to_val_map[n] for n in f_node.inputs]
-                    f_node.op.compute(f_node, input_vals, f_node_val, func)
-                    f_node_to_val_map[f_node] = f_node_val
-
-                # capture the current varibles
+                # Include a tuple of things to present to the callback, defined
+                #  in DependencyQueue.pyx.
                 self.engine.push(
-                    functools.partial(exec_func, node_to_val_map, node, node_val, self.node_to_compiled_func[node]),
+                    (node_to_val_map, node, node_val, self.node_to_compiled_func[node]),
                     [get_resource_tag(n) for n in node.inputs],
                     [get_resource_tag(node)])
-        finally:
-            self.engine.stop()
 
         # Collect node values.
         if convert_to_numpy_ret_vals:

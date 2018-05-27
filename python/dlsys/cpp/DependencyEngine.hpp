@@ -14,7 +14,7 @@ public:
     DependencyEngine() : currentTag(0), shouldStop(true)
     { }
 
-    void push(callbackType execFunc,
+    void push(callbackType execFunc, void* callbackArgs,
         const std::set<long>& readTags,
         const std::set<long>& mutateTags);
 

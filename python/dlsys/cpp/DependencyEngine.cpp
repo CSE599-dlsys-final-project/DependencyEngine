@@ -5,7 +5,7 @@
 #include "DependencyEngine.hpp"
 #include "Instruction.hpp"
 
-void DependencyEngine::push(callbackType execFunc,
+void DependencyEngine::push(callbackType execFunc, void* callbackArgs,
     const std::set<long>& readTags,
     const std::set<long>& mutateTags) {
 
@@ -14,8 +14,11 @@ void DependencyEngine::push(callbackType execFunc,
     both.insert(mutateTags.begin(), mutateTags.end());
     int pendingCount = both.size();
 
-    auto instruction = std::make_shared<Instruction>(execFunc,
+    auto instruction = std::make_shared<Instruction>(execFunc, callbackArgs,
         readTags, mutateTags, pendingCount);
+
+    // As a test, we can execute the thing right here:
+    // execFunc(callbackArgs);
 
     for (long readTag : readTags) {
         if (mutateTags.count(readTag) == 0) {
