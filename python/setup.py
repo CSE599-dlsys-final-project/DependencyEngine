@@ -2,8 +2,8 @@
 
 import glob
 
-from distutils.core import setup
-from distutils.extension import Extension
+from setuptools import setup
+from setuptools.extension import Extension
 
 from Cython.Build import cythonize
 
@@ -20,5 +20,8 @@ setup(
     name='DlSysDependencyEngine',
     version='0.9',
     description='Dependency engine for computation graph executor',
-    ext_modules = cythonize([cppExtension])
+    ext_modules = cythonize([cppExtension]),
+    install_requires=[
+        "cython~=0.28"
+    ]
 )
