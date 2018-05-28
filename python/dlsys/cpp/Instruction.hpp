@@ -1,6 +1,6 @@
 #pragma once
 
-#include <set>
+#include <unordered_set>
 
 using callbackType = void(*)(void*);
 // (^ a void-returning function that takes a single void pointer argument.)
@@ -8,16 +8,17 @@ using callbackType = void(*)(void*);
 class Instruction {
 public:
     Instruction(callbackType execFunc, void* callbackArgs,
-            const std::set<long>& readTags, const std::set<long>& mutateTags,
+            const std::unordered_set<long>& readTags,
+            const std::unordered_set<long>& mutateTags,
             int pendingCount):
         execFunc(execFunc), callbackArgs(callbackArgs),
         readTags(readTags), mutateTags(mutateTags),
         pendingCount(pendingCount)
     { }
 
-    callbackType execFunc;
-    void* callbackArgs;
-    std::set<long> readTags;
-    std::set<long> mutateTags;
+    const callbackType execFunc;
+    const void* callbackArgs;
+    const std::unordered_set<long> readTags;
+    const std::unordered_set<long> mutateTags;
     int pendingCount;
 };

@@ -2,7 +2,7 @@
 
 #include <string>
 #include <unordered_map>
-#include <set>
+#include <unordered_set>
 #include <memory>
 #include <atomic>
 
@@ -15,8 +15,8 @@ public:
     { }
 
     void push(callbackType execFunc, void* callbackArgs,
-        const std::set<long>& readTags,
-        const std::set<long>& mutateTags);
+        const std::unordered_set<long>& readTags,
+        const std::unordered_set<long>& mutateTags);
 
     long newVariable();
 

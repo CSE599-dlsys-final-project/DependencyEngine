@@ -1,15 +1,13 @@
 #include <memory>
-#include <cassert>
-#include <iostream>
 
 #include "DependencyEngine.hpp"
 #include "Instruction.hpp"
 
 void DependencyEngine::push(callbackType execFunc, void* callbackArgs,
-    const std::set<long>& readTags,
-    const std::set<long>& mutateTags) {
+    const std::unordered_set<long>& readTags,
+    const std::unordered_set<long>& mutateTags) {
 
-    std::set<long> both;
+    std::unordered_set<long> both;
     both.insert(readTags.begin(), readTags.end());
     both.insert(mutateTags.begin(), mutateTags.end());
     int pendingCount = both.size();

@@ -2,13 +2,14 @@
 
 from contextlib import contextmanager
 
-from libcpp.set cimport set
+from libcpp.unordered_set cimport unordered_set
 
 cdef extern from "DependencyEngine.hpp":
     ctypedef void (*callback)(void *user_args)
 
     cdef cppclass DependencyEngine:
-        void push(callback execFunc, void* args, set[long] readTags, set[long] mutateTags)
+        void push(callback execFunc, void* args,
+            unordered_set[long] readTags, unordered_set[long] mutateTags)
 
         long newVariable()
 
