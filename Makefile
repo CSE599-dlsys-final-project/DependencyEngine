@@ -1,3 +1,6 @@
+install:
+	pip3 install -e ./python/ --user
+
 test_all: test_dependency_engine test_threading
 
 test_dependency_engine:
@@ -12,3 +15,4 @@ export:
 clean:
 	rm -rf ./python/dlsys/*.pyc
 	rm -rf ./tests/*.pyc
+	rm -rf ./python/build

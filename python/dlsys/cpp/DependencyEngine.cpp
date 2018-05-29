@@ -13,7 +13,7 @@ void DependencyEngine::push(callbackType execFunc, void* callbackArgs,
     int pendingCount = both.size();
 
     auto instruction = std::make_shared<Instruction>(execFunc, callbackArgs,
-        readTags, mutateTags, pendingCount);
+        readTags, mutateTags, pendingCount, this->queues);
 
     // As a test, we can execute the thing right here:
     // execFunc(callbackArgs);

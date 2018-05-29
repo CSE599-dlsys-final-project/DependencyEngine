@@ -107,7 +107,7 @@ void ResourceStateQueue::priv_toState(ResourceStateQueue::State state) {
     // retrieve it only once to save time
     auto s = this->state;
     if (s == ResourceStateQueue::N) {
-        if (state == ResourceStateQueue::MR) {
+        if (state != ResourceStateQueue::MR) {
             std::cerr << "Invalid state transition" << std::endl;
             exit(EXIT_FAILURE);
         }
