@@ -778,6 +778,8 @@ class Executor(object):
                 n.__resource_tag__ = t
                 return t
 
+        seen_tuples = []
+        
         with self.engine.threaded_executor():
             # Traverse graph in topo order and compute values for all nodes.
 
@@ -790,8 +792,15 @@ class Executor(object):
 
                 # Include a tuple of things to present to the callback, defined
                 #  in DependencyQueue.pyx.
+                callback_args = (node_to_val_map,
+                    node, node_val, self.node_to_compiled_func[node])
+
+                # Funny but if we don't keep a reference to this tuple, it will
+                # get GC'd by Python before our C++ callback fires.
+                seen_tuples.append(callback_args)
+
                 self.engine.push(
-                    (node_to_val_map, node, node_val, self.node_to_compiled_func[node]),
+                    callback_args,
                     [get_resource_tag(n) for n in node.inputs],
                     [get_resource_tag(node)])
 

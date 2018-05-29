@@ -1,10 +1,11 @@
 #pragma once
 
 #include <queue>
+#include <vector>
 #include <mutex>
 #include <condition_variable>
+#include <thread>
 #include <memory>
-#include <iostream>
 
 #include "Instruction.hpp"
 
@@ -29,15 +30,20 @@ public:
     void restoreState();
 
 private:
+    void priv_toState(ResourceStateQueue::State state);
+
+private:
     std::queue<std::shared_ptr<Instruction>> queue;
     std::mutex queueMutex;
     std::condition_variable queueActivity;
     const std::atomic<bool>& shouldStop;
     const long tag;
     std::mutex stateMutex;
+    std::unique_ptr<std::thread> listenThread;
+    std::vector<std::unique_ptr<std::thread>> workThreads;
     // the current state of the resource-state queue
     ResourceStateQueue::State state;
-    void priv_toState(ResourceStateQueue::State state);
+
     // number of R states
     short pastRChainLength;
 };

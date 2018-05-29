@@ -1,3 +1,6 @@
+#include <iostream>
+#include <cassert>
+
 #include "ResourceStateQueue.hpp"
 
 void ResourceStateQueue::push(std::shared_ptr<Instruction> instruction) {
@@ -33,14 +36,65 @@ void ResourceStateQueue::notify() {
 }
 
 void ResourceStateQueue::startListening() {
-
+    this->listenThread =
+        std::make_unique<std::thread>(&ResourceStateQueue::listen, this);
 }
 
 void ResourceStateQueue::stopListening() {
+    this->listenThread->join();
 
+    for (const auto& threadPtr : this->workThreads) {
+        threadPtr->join();
+    }
 }
 
 bool ResourceStateQueue::handleNextPendingInstruction() {
+    if (this->queue.empty()) {
+        return false;
+    }
+
+    std::shared_ptr<Instruction> instruction = this->queue.front();
+
+    if (instruction->mutateTags.count(this->tag) > 0) {
+
+        if (this->state == ResourceStateQueue::MR) {
+            this->toState(ResourceStateQueue::N);
+
+            this->queue.pop();
+
+            if (instruction->decrementPcAndIsZero()) {
+                // Run it.
+
+                this->workThreads.push_back(
+                    std::make_unique<std::thread>(&Instruction::run, instruction)
+                );
+            }
+
+            return true;
+        }
+    }
+    else if (instruction->readTags.count(this->tag) > 0
+        && instruction->mutateTags.count(this->tag) == 0) {
+
+        if (this->state == ResourceStateQueue::MR
+         || this->state == ResourceStateQueue::R) {
+
+            this->toState(ResourceStateQueue::R);
+            this->queue.pop();
+
+            if (instruction->decrementPcAndIsZero()) {
+                this->workThreads.push_back(
+                    std::make_unique<std::thread>(&Instruction::run, instruction)
+                );
+            }
+
+            return true;
+        }
+    }
+    else {
+        assert(false);
+    }
+
     return false;
 }
 
