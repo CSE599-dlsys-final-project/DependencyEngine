@@ -124,7 +124,12 @@ void ResourceStateQueue::priv_toState(ResourceStateQueue::State state) {
             }
         }
     } else { // MR
-        if (state == ResourceStateQueue::R) this->pastRChainLength++;
+        if (state == ResourceStateQueue::R) {
+            this->pastRChainLength++;
+        } else if (state == ResourceStateQueue::MR) {
+            std::cerr << "Invalid state transition" << std::endl;
+            exit(EXIT_FAILURE);
+        }
     }
     // update the state
     this->state = state;

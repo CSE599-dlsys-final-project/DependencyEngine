@@ -17,9 +17,7 @@ bool Instruction::decrementPcAndIsZero() {
 }
 
 void Instruction::run() {
-    std::cerr << "Calling callback..." << std::endl;
     this->execFunc(this->callbackArgs);
-    std::cerr << "Done." << std::endl;
     this->restoreStatesAndNotify();
 }
 
@@ -28,7 +26,7 @@ void Instruction::restoreStatesAndNotify(){
     both.insert(this->readTags.begin(), this->readTags.end());
     both.insert(this->mutateTags.begin(), this->mutateTags.end());
     for (long tag : both) {
-        std::unique_ptr<ResourceStateQueue>& tagQueue = this->queues.at(tag);
+        const std::unique_ptr<ResourceStateQueue>& tagQueue = this->queues.at(tag);
         tagQueue->restoreState();
         tagQueue->notify();
     }

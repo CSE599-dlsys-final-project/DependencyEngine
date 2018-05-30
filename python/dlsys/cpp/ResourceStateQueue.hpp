@@ -12,7 +12,7 @@
 class ResourceStateQueue {
 public:
     ResourceStateQueue(const std::atomic<bool>& shouldStop, long tag)
-        : shouldStop(shouldStop), tag(tag), state(MR)
+        : shouldStop(shouldStop), tag(tag), state(MR), pastRChainLength(0)
     {  }
 
     // represent the state of a resource-state queue
