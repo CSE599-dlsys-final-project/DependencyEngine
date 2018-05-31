@@ -1,7 +1,7 @@
 #pragma once
 
 #include <queue>
-#include <vector>
+#include <forward_list>
 #include <mutex>
 #include <condition_variable>
 #include <thread>
@@ -40,7 +40,7 @@ private:
     const long tag;
     std::mutex stateMutex;
     std::unique_ptr<std::thread> listenThread;
-    std::vector<std::unique_ptr<std::thread>> workThreads;
+    std::forward_list<std::unique_ptr<std::thread>> workThreads;
     // the current state of the resource-state queue
     ResourceStateQueue::State state;
 

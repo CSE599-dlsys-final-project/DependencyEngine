@@ -46,9 +46,10 @@ void ResourceStateQueue::stopListening() {
     this->listenThread->join();
 
     for (const auto& threadPtr : this->workThreads) {
-        if(threadPtr->joinable())
-            threadPtr->join();
+        threadPtr->join();
     }
+
+    this->workThreads.clear();
 }
 
 bool ResourceStateQueue::handleNextPendingInstruction() {
@@ -68,7 +69,7 @@ bool ResourceStateQueue::handleNextPendingInstruction() {
             if (instruction->decrementPcAndIsZero()) {
                 // Run it.
 
-                this->workThreads.push_back(
+                this->workThreads.push_front(
                     std::make_unique<std::thread>(&Instruction::run, instruction)
                 );
             }
@@ -86,7 +87,7 @@ bool ResourceStateQueue::handleNextPendingInstruction() {
             this->queue.pop();
 
             if (instruction->decrementPcAndIsZero()) {
-                this->workThreads.push_back(
+                this->workThreads.push_front(
                     std::make_unique<std::thread>(&Instruction::run, instruction)
                 );
             }
