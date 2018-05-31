@@ -41,10 +41,13 @@ void ResourceStateQueue::startListening() {
 }
 
 void ResourceStateQueue::stopListening() {
+    // notify the queue to stop listening
+    this->queueActivity.notify_one();
     this->listenThread->join();
 
     for (const auto& threadPtr : this->workThreads) {
-        threadPtr->join();
+        if(threadPtr->joinable())
+            threadPtr->join();
     }
 }
 
