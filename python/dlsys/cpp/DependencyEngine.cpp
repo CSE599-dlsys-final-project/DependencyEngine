@@ -57,7 +57,4 @@ void DependencyEngine::stop() {
     for (const auto& entry : this->queues) {
         entry.second->stopListening();
     }
-
-    // TODO: stop listening on each ResourceStateQueue, join on
-    // all threads.
 }
