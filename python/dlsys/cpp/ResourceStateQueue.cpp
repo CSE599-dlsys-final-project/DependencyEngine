@@ -45,11 +45,10 @@ void ResourceStateQueue::stopListening() {
     this->queueActivity.notify_one();
     this->listenThread->join();
 
-    for (const auto& threadPtr : this->workThreads) {
-        threadPtr->join();
+    while (!this->workThreads.empty()) {
+        this->workThreads.front()->join();
+        this->workThreads.pop_front();
     }
-
-    this->workThreads.clear();
 }
 
 bool ResourceStateQueue::handleNextPendingInstruction() {
